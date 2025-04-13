@@ -1,0 +1,100 @@
+#include "cache.h"
+#include "ooo_cpu.h"
+
+// initialize replacement state
+void CACHE::llc_initialize_replacement()
+{
+
+}
+
+// SHARP Replacement Victim in LLC
+uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
+{
+    // STEP 1 : Find any invalid cache block. (No core uses this line)
+    for(uint32_t way = 0; way < NUM_WAY; way++) {
+        if(block[set][way].valid == 0)
+            return way;
+    }
+
+    // STEP 2 : Evict only from the requestor core.
+    int inL2Cache, inL2CacheCounter, inRequestorL2;
+    int lruVictimLLC = -1, lruWayVictimLLC = -1, lruVictimRequestorL2 = -1, lruWayVictimRequestorL2 = -1;
+    for(uint32_t way = 0; way < NUM_WAY; way++)
+    {
+        // Finding whether the way is available in each core's L2
+        inL2Cache = 0, inL2CacheCounter = 0, inRequestorL2 = 0;
+        for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+            if(ooo_cpu[cpu_id].L2C.search(block[set][way].address)) {
+                inL2Cache = 1;
+                inL2CacheCounter++;
+                if(cpu_id == cpu) {
+                   inRequestorL2 = 1;
+                }
+            }
+        }
+
+        // No data available in L2 -- Take the LLC Victim Block
+        if(!inL2Cache) {
+            if((int)block[set][way].lru > lruVictimLLC) {
+                lruWayVictimLLC = way;
+                lruVictimLLC = block[set][way].lru;
+            }
+        }
+
+        // Only in Requestor's L2 -- Evict the LLC candidate of Requestor Core
+        else if((inRequestorL2) && (inL2CacheCounter == 1)) {
+            if((int)block[set][way].lru > lruVictimRequestorL2) {
+                lruWayVictimRequestorL2 = way;
+                lruVictimRequestorL2 = block[set][way].lru;
+            }
+        }
+    }
+
+    // Return LLC Victim by LRU
+    if(lruVictimLLC != -1) {
+        return lruWayVictimLLC;
+    }
+
+    // Return Requestor Victim Block as this is only used by requestor
+    else if(lruVictimRequestorL2 != -1) {
+        return lruWayVictimRequestorL2;
+    }
+    
+    // STEP 3 : Random Eviction
+    else {
+        uint32_t way = (uint32_t)(rand() % NUM_WAY); // Get a random way
+        for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+            if(ooo_cpu[cpu_id].L2C.search(block[set][way].address)) {
+                ooo_cpu[cpu_id].alarm_counter++;        // Incrementing the alarm Counter
+                
+                if(ooo_cpu[cpu_id].alarm_counter > SHARP_THRESHOLD) {
+                    cout << "Cross-core eviction attack! Terminating" << endl;
+                    assert(0);
+                }
+            }
+        }
+        return way;
+    }
+}
+
+// called on every cache hit and cache fill
+void CACHE::llc_update_replacement_state(uint32_t cpu, uint32_t set, uint32_t way, uint64_t full_addr, uint64_t ip, uint64_t victim_addr, uint32_t type, uint8_t hit)
+{
+
+    if ((type == WRITEBACK) && ip)
+        assert(0);
+
+    // uncomment this line to see the LLC accesses
+    // cout << "CPU: " << cpu << "  LLC " << setw(9) << TYPE_NAME << " set: " << setw(5) << set << " way: " << setw(2) << way;
+    // cout << hex << " paddr: " << setw(12) << paddr << " ip: " << setw(8) << ip << " victim_addr: " << victim_addr << dec << endl;
+
+    // baseline LRU
+    if (hit && (type == WRITEBACK)) // writeback hit does not update LRU state
+        return;
+
+    return lru_update(set, way);
+}
+
+void CACHE::llc_replacement_final_stats()
+{
+}
