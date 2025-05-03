@@ -1,5 +1,10 @@
 #include "cache.h"
 #include "ooo_cpu.h"
+#include "uncore.h"
+
+uint64_t tc_block_addr;
+uint64_t tc_block_data;
+int tc_cpu_0_used, tc_cpu_1_used, tc_flush_core_id;
 
 // initialize replacement state
 void CACHE::llc_initialize_replacement()
@@ -10,9 +15,26 @@ void CACHE::llc_initialize_replacement()
 // SHARP Replacement Victim in LLC
 uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type)
 {
+
     // STEP 1 : Find any invalid cache block. (No core uses this line)
     for(uint32_t way = 0; way < NUM_WAY; way++) {
         if(block[set][way].valid == 0)
+            // TEMP CODE TO TEST TREASURE CACHE. Comment it later
+            // Taking the parameters to treasure cache 
+            // tc_block_addr = block[set][way].full_addr;
+            // tc_block_data = block[set][way].data;
+            // for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+            //     if(ooo_cpu[cpu_id].L2C.search(block[set][way].address)) {
+            //         if(cpu_id == 0) tc_cpu_0_used = 1; else tc_cpu_0_used = 0;
+            //         if(cpu_id == 1) tc_cpu_1_used = 1; else tc_cpu_1_used = 0;
+            //     }
+            // }
+            // tc_flush_core_id = cpu;
+
+            // uncore.LLC.tc_data_add(tc_block_addr, tc_block_data, tc_cpu_0_used, tc_cpu_1_used, tc_flush_core_id);
+            // uncore.LLC.tc_check_threshold();
+            // cout << "Data Added to TC" << endl;
+            /////////////////////
             return way;
     }
 
@@ -52,17 +74,65 @@ uint32_t CACHE::llc_find_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, c
 
     // Return LLC Victim by LRU
     if(lruVictimLLC != -1) {
+        // TEMP CODE TO TEST TREASURE CACHE. Comment it later
+        // Taking the parameters to treasure cache 
+        // tc_block_addr = block[set][lruWayVictimLLC].full_addr;
+        // tc_block_data = block[set][lruWayVictimLLC].data;
+        // for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+        //     if(ooo_cpu[cpu_id].L2C.search(block[set][lruWayVictimLLC].address)) {
+        //         if(cpu_id == 0) tc_cpu_0_used = 1; else tc_cpu_0_used = 0;
+        //         if(cpu_id == 1) tc_cpu_1_used = 1; else tc_cpu_1_used = 0;
+        //     }
+        // }
+        // tc_flush_core_id = cpu;
+
+        // uncore.LLC.tc_data_add(tc_block_addr, tc_block_data, tc_cpu_0_used, tc_cpu_1_used, tc_flush_core_id);
+        // uncore.LLC.tc_check_threshold();
+        // cout << "Data Added to TC" << endl;
+        /////////////////////////
         return lruWayVictimLLC;
     }
 
     // Return Requestor Victim Block as this is only used by requestor
     else if(lruVictimRequestorL2 != -1) {
+        // TEMP CODE TO TEST TREASURE CACHE. Comment it later
+        // Taking the parameters to treasure cache 
+        // tc_block_addr = block[set][lruWayVictimRequestorL2].full_addr;
+        // tc_block_data = block[set][lruWayVictimRequestorL2].data;
+        // for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+        //     if(ooo_cpu[cpu_id].L2C.search(block[set][lruWayVictimRequestorL2].address)) {
+        //         if(cpu_id == 0) tc_cpu_0_used = 1; else tc_cpu_0_used = 0;
+        //         if(cpu_id == 1) tc_cpu_1_used = 1; else tc_cpu_1_used = 0;
+        //     }
+        // }
+        // tc_flush_core_id = cpu;
+
+        // uncore.LLC.tc_data_add(tc_block_addr, tc_block_data, tc_cpu_0_used, tc_cpu_1_used, tc_flush_core_id);
+        // uncore.LLC.tc_check_threshold();
+        // cout << "Data Added to TC" << endl;
+        /////////////////////
         return lruWayVictimRequestorL2;
     }
     
     // STEP 3 : Random Eviction
     else {
         uint32_t way = (uint32_t)(rand() % NUM_WAY); // Get a random way
+
+        // Taking the parameters to treasure cache 
+        tc_block_addr = block[set][way].full_addr;
+        tc_block_data = block[set][way].data;
+        for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
+            if(ooo_cpu[cpu_id].L2C.search(block[set][way].address)) {
+                if(cpu_id == 0) tc_cpu_0_used = 1; else tc_cpu_0_used = 0;
+                if(cpu_id == 1) tc_cpu_1_used = 1; else tc_cpu_1_used = 0;
+            }
+        }
+        tc_flush_core_id = cpu;
+
+        uncore.LLC.tc_data_add(tc_block_addr, tc_block_data, tc_cpu_0_used, tc_cpu_1_used, tc_flush_core_id);
+        uncore.LLC.tc_check_threshold();
+        // cout << "Data Added to TC" << endl;
+
         for(uint32_t cpu_id = 0; cpu_id < NUM_CPUS; cpu_id++) {
             if(ooo_cpu[cpu_id].L2C.search(block[set][way].address)) {
                 ooo_cpu[cpu_id].alarm_counter++;        // Incrementing the alarm Counter

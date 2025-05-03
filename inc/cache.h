@@ -2,6 +2,10 @@
 #define CACHE_H
 
 #include "memory_class.h"
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+
 // INICIO AGUS
 extern void notify_prefetch(uint64_t addr, uint64_t tag, uint32_t cpu, uint64_t cycle);
 // FIN AGUS
@@ -107,6 +111,8 @@ extern uint32_t PAGE_TABLE_LATENCY, SWAP_LATENCY;
 #define LLC_MSHR_SIZE NUM_CPUS*64
 #define LLC_LATENCY 20  // 5 (L1I or L1D) + 10 + 20 = 35 cycles
 
+#define TC_MAX_BUFFER_SIZE 128
+
 class CACHE : public MEMORY {
   public:
     uint32_t cpu;
@@ -182,6 +188,31 @@ class CACHE : public MEMORY {
 	     roi_instr_miss[NUM_CPUS][NUM_TYPES];
 
     uint64_t total_miss_latency;
+
+    #ifdef TREASURE_CACHE
+        // Adding relevant buffer and the core valid bit details for treasure cache
+        uint64_t BUFFER_SIZE = TC_MAX_BUFFER_SIZE;
+
+        uint64_t buffer_data[TC_MAX_BUFFER_SIZE];
+        uint64_t buffer_addr[TC_MAX_BUFFER_SIZE];
+        int cpu_0_valid[TC_MAX_BUFFER_SIZE];
+        int cpu_1_valid[TC_MAX_BUFFER_SIZE];
+        int block_used[TC_MAX_BUFFER_SIZE];
+
+        uint64_t cpu_0_counter = 0;
+        uint64_t cpu_1_counter = 0;
+        uint64_t counter_threshold = 64;
+        uint64_t global_counter = 0;
+        uint64_t decrement_value = 1;
+
+        // Function call counters
+        uint64_t search_call_count = 0;
+        uint64_t add_data_call_count = 0;
+        uint64_t tc_check_threshold_call_count = 0;
+        uint64_t tc_evict_buffer_data_call_count = 0;
+
+        uint64_t buffer_searches_obtained = 0;  // This will tell how much results has been returned from treasure cache. (That many number of misses is considered to be as hits. Therefore making the other core to think that the cache has accessed it, however it would have not accessed leading to the incorrect result in flush based attacks.)
+    #endif
     
     // constructor
     CACHE(string v1, uint32_t v2, int v3, uint32_t v4, uint32_t v5, uint32_t v6, uint32_t v7, uint32_t v8) 
@@ -424,6 +455,14 @@ class CACHE : public MEMORY {
 
 
              lru_victim(uint32_t cpu, uint64_t instr_id, uint32_t set, const BLOCK *current_set, uint64_t ip, uint64_t full_addr, uint32_t type);
+
+    #ifdef TREASURE_CACHE
+        int tc_search(uint64_t addr, int cpu_in);
+        int tc_evict_buffer_data();
+        void tc_data_add(uint64_t addr, uint64_t data, int cpu_0_v, int cpu_1_v, int flush_cpu_id);
+        void tc_initialize_buffer();
+        void tc_check_threshold();
+    #endif
 };
 
 #endif

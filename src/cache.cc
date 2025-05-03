@@ -115,6 +115,15 @@ void CACHE::handle_fill()
         else
             way = (this->*find_victim)(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
 
+    #ifdef TREASURE_CACHE
+        if(cache_type == IS_LLC) {
+            // Check whether the data is available in treasure cache. (Increment the count to take the stats, not updating the flow of simulator to avoid errors)
+            uncore.LLC.tc_search(block[set][way].full_addr, cpu);
+            // Check whether threshold is crossing the limit. If so, evict a random block.
+            uncore.LLC.tc_check_threshold();
+        }
+    #endif
+
         ////////////////////////////////////////////////////way = (this->*find_victim)(fill_cpu, MSHR.entry[mshr_index].instr_id, set, block[set], MSHR.entry[mshr_index].ip, MSHR.entry[mshr_index].full_addr, MSHR.entry[mshr_index].type);
 
 
@@ -4377,3 +4386,98 @@ if((cache_type == IS_L1I || cache_type == IS_L1D) && reads_ready.size() == 0)
 
             return 0; /* not found */
         }
+
+        #ifdef TREASURE_CACHE
+            // Function 1: Search
+            int CACHE::tc_search(uint64_t addr, int cpu_in) {
+                search_call_count++;
+                for (uint64_t i = 0; i < BUFFER_SIZE; i++) {
+                    if (block_used[i]) {
+                        if (buffer_addr[i] == addr) {
+                            if ((cpu_in == 0 && cpu_0_valid[i]) ||
+                                (cpu_in == 1 && cpu_1_valid[i])) {
+                                    buffer_searches_obtained++;
+                                    return i;
+                            }
+                        }
+                    }
+                }
+                return BUFFER_SIZE;
+            }
+
+            // Function 4: Evict buffer
+            int CACHE::tc_evict_buffer_data() {
+                tc_evict_buffer_data_call_count++;
+                while (1) {
+                    int idx = rand() % BUFFER_SIZE;
+                    if (block_used[idx]) {
+                        block_used[idx] = 0;
+                        return idx;
+                    }
+                }
+            }
+            
+            // Function 2: Add data
+            void CACHE::tc_data_add(uint64_t addr, uint64_t data, int cpu_0_v, int cpu_1_v, int flush_cpu_id) {
+                add_data_call_count++;
+                int index = -1;
+                for (uint64_t i = 0; i < BUFFER_SIZE; i++) {
+                    if (block_used[i] == 0) {
+                        index = i;
+                        break;
+                    }
+                }
+            
+                if (index == -1) {
+                    index = tc_evict_buffer_data();
+                }
+            
+                buffer_addr[index] = addr;
+                buffer_data[index] = data;
+                cpu_0_valid[index] = cpu_0_v;
+                cpu_1_valid[index] = cpu_1_v;
+                block_used[index] = 1;
+            
+                if (flush_cpu_id == 0) cpu_0_counter++;
+                else if (flush_cpu_id == 1) cpu_1_counter++;
+                else assert(0);
+            
+                global_counter++;
+            }
+            
+            // Function 3: Check threshold
+            void CACHE::tc_check_threshold() {
+                tc_check_threshold_call_count++;
+                if (cpu_0_counter >= counter_threshold) {
+                    for (uint64_t i = 0; i < BUFFER_SIZE; i++) {
+                        if (block_used[i] && cpu_0_valid[i]) {
+                            cpu_0_valid[i] = 0;
+                            cpu_0_counter -= decrement_value;
+                            break;
+                        }
+                    }
+                }
+            
+                if (cpu_1_counter >= counter_threshold) {
+                    for (uint64_t i = 0; i < BUFFER_SIZE; i++) {
+                        if (block_used[i] && cpu_1_valid[i]) {
+                            cpu_1_valid[i] = 0;
+                            cpu_1_counter -= decrement_value;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Initialization function
+            void CACHE::tc_initialize_buffer() {
+                srand(time(NULL));
+                for (uint64_t i = 0; i < TC_MAX_BUFFER_SIZE; i++) {
+                    buffer_data[i] = 0;
+                    buffer_addr[i] = 0;
+                    cpu_0_valid[i] = 0;
+                    cpu_1_valid[i] = 0;
+                    block_used[i] = 0;
+                }
+            }
+        #endif

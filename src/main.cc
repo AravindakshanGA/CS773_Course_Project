@@ -941,6 +941,17 @@ void swap_context(uint8_t swap_cpu_0, uint8_t swap_cpu_1)
  }
  #endif
 
+ #ifdef TREASURE_CACHE
+ void print_tc_stats() {
+     cout << "\nTREASURE CACHE METRICS "<< endl;
+     cout << "\nNumber of data served from treasure cache " << uncore.LLC.buffer_searches_obtained << endl;
+     cout << "\nGlobal Counter " << uncore.LLC.global_counter << endl;
+     cout << "\nCPU 0 Coutner " << uncore.LLC.cpu_0_counter << endl;
+     cout << "\nCPU 1 Coutner " << uncore.LLC.cpu_1_counter << endl;
+     cout << endl;
+ }
+ #endif
+
 void fill_page_table(string trace_name)
 {
 	cout << trace_name << endl;
@@ -1783,6 +1794,10 @@ int main(int argc, char** argv)
 
     #ifdef INCLUSIVE_CACHE
         print_backreq_stats();
+    #endif
+
+    #ifdef TREASURE_CACHE
+        print_tc_stats();
     #endif
 
     cout << endl << "Region of Interest Statistics" << endl;

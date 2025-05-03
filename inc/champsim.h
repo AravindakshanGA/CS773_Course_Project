@@ -27,6 +27,7 @@
 #define DRC_BYPASS
 //#define NO_CRC2_COMPILE
 #define INCLUSIVE_CACHE     // Enable this to make Caches Inclusive
+#define TREASURE_CACHE      // Enable this to include additional buffer features for treasure cache.
 
 //#define PUSH_DTLB_PB 	//@Vasudha: Use DTLB Prefetch buffer to store translations that are prefetched by DTLB
 #define INS_PAGE_TABLE_WALKER
